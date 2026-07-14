@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pocket Photo Booth 📸
 
-## Getting Started
+A Korean-style photo booth (Life4Cuts / Photoism vibes) in your browser.
+Curtain, LED lights, countdown, flash, printer — then decorate your strip
+and pin it to a virtual wooden memory desk.
 
-First, run the development server:
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000> and allow camera access. Deploys to Vercel as-is.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Frame collections
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+12 designer templates rendered on canvas — real paper textures, print
+imperfections, per-collection typography, emboss & gold foil:
 
-## Learn More
+Classic Korean Booth · MUJI Edition · Retro Film · Scrapbook · Museum
+Collection · Travel Memories · Love Letter · Magazine Cover · Polaroid
+Vintage · Cloud Dream · Dark Edition · Seasonal (auto-changes with the
+calendar). Every print gets a random seed — dust, tape, doodles and ink
+density differ on each strip, so no two exports are identical.
 
-To learn more about Next.js, take a look at the following resources:
+Customizable: title / subtitle / location / signature, date format, logo,
+paper & frame colors, border thickness, corner radius — with a live preview.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Curtain entrance/exit, ambient booth lighting, LED frame, voice welcome
+- Front/rear camera, 2/4/6-cut strips, auto countdown with pose prompts
+- 10 film filters (grain / dust / light-leak rendered on canvas)
+- Realistic printing animation — drag the strip up to take it
+- Stickers (drag / resize / rotate), draw (pen / marker / highlighter, undo/redo), captions
+- Export PNG/JPG — re-rendered at 3× so textures stay crisp; native share, copy image/link
+- Memory desk: keep, move, rotate and stack strips (persisted in localStorage)
+- All sounds synthesized with Web Audio — zero binary assets
 
-## Deploy on Vercel
+## Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 15 (App Router) · TypeScript · TailwindCSS 4 · Framer Motion · shadcn/ui · Lucide
