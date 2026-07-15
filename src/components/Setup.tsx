@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Sparkles, Wand2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -52,7 +52,6 @@ export function Setup(props: {
 }) {
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [livePreview, setLivePreview] = useState<string | null>(null);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const col = collectionById(props.frameId);
 
   // render the 12 collection cards once
@@ -70,14 +69,15 @@ export function Setup(props: {
     };
   }, []);
 
-  // live customized preview of the selected collection
+  // live customized preview of the selected collection — renders on every
+  // change so slider drags update in real time (renderPreview caches per value)
   useEffect(() => {
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
-      setLivePreview(await renderPreview(props.frameId, props.custom));
-    }, 200);
+    let stale = false;
+    renderPreview(props.frameId, props.custom).then((url) => {
+      if (!stale) setLivePreview(url);
+    });
     return () => {
-      if (debounce.current) clearTimeout(debounce.current);
+      stale = true;
     };
   }, [props.frameId, props.custom]);
 
