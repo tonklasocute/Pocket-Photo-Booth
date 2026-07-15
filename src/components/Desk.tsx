@@ -1,12 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, RotateCcw, RotateCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Play, RotateCcw, RotateCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { sfx } from "@/lib/sound";
 
-export type DeskStrip = { id: string; img: string; x: number; y: number; rot: number; z: number };
+export type DeskStrip = {
+  id: string;
+  img: string;
+  x: number;
+  y: number;
+  rot: number;
+  z: number;
+  /** live memory: animated preview + session meta */
+  gif?: string;
+  ts?: number;
+  frame?: string;
+};
 
 const KEY = "ppb-desk";
 const MAX_STRIPS = 8;
@@ -23,11 +34,16 @@ function saveDesk(strips: DeskStrip[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(strips));
   } catch {
-    /* quota exceeded — keep strips in memory only. ponytail: no eviction UI */
+    // quota exceeded — GIFs are the heavy part, drop them and keep the strips
+    try {
+      localStorage.setItem(KEY, JSON.stringify(strips.map(({ gif: _gif, ...s }) => s)));
+    } catch {
+      /* still too big — keep strips in memory only. ponytail: no eviction UI */
+    }
   }
 }
 
-export function addStripToDesk(img: string) {
+export function addStripToDesk(img: string, extras?: { gif?: string; frame?: string }) {
   const strips = loadDesk();
   const maxZ = Math.max(0, ...strips.map((s) => s.z));
   strips.push({
@@ -37,6 +53,9 @@ export function addStripToDesk(img: string) {
     y: (Math.random() - 0.5) * 60,
     rot: (Math.random() - 0.5) * 16,
     z: maxZ + 1,
+    gif: extras?.gif,
+    ts: Date.now(),
+    frame: extras?.frame,
   });
   saveDesk(strips.slice(-MAX_STRIPS));
 }
@@ -44,6 +63,7 @@ export function addStripToDesk(img: string) {
 export function Desk({ onBack }: { onBack: () => void }) {
   const [strips, setStrips] = useState<DeskStrip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
 
   useEffect(() => setStrips(loadDesk()), []);
 
@@ -129,9 +149,11 @@ export function Desk({ onBack }: { onBack: () => void }) {
             onDragEnd={(_, info) => update(s.id, { x: s.x + info.offset.x, y: s.y + info.offset.y })}
             onPointerDown={(e) => {
               e.stopPropagation();
-              setSelected(s.id);
+              setSelected(s.id); // tap doubles as "play live memory" on touch screens
               bringToFront(s.id);
             }}
+            onMouseEnter={() => setHovered(s.id)}
+            onMouseLeave={() => setHovered(null)}
           >
             <img
               src={s.img}
@@ -146,6 +168,27 @@ export function Desk({ onBack }: { onBack: () => void }) {
               aria-hidden
               className="absolute -top-2 left-1/2 h-5 w-14 -translate-x-1/2 -rotate-3 rounded-sm bg-white/40 shadow-sm backdrop-blur-[1px]"
             />
+            {/* live memory: badge at rest, animated preview on hover / tap */}
+            {s.gif &&
+              (hovered === s.id || selected === s.id ? (
+                <motion.div
+                  className="pointer-events-none absolute -top-28 left-1/2 z-50 w-32 -translate-x-1/2 overflow-hidden rounded-lg border-4 border-white bg-white shadow-2xl"
+                  initial={{ opacity: 0, y: 10, rotate: -3 }}
+                  animate={{ opacity: 1, y: 0, rotate: -2 }}
+                >
+                  {/* gif img mounts only while shown — lazy by construction */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.gif} alt="Live memory" className="block w-full rounded-[3px]" />
+                  <p className="truncate px-1 pt-1 text-center text-[9px] font-semibold text-[#5c4a52]">
+                    {s.frame ?? "Live memory"}
+                    {s.ts ? ` · ${new Date(s.ts).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                  </p>
+                </motion.div>
+              ) : (
+                <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+                  <Play className="size-2.5 translate-x-[0.5px]" />
+                </span>
+              ))}
           </motion.div>
         ))}
       </div>

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCamera } from "@/hooks/useCamera";
 import { filterById, randomPoses, type PhotoCount, type Pose } from "@/lib/booth";
+import { recordingMime, type LiveCapture } from "@/lib/livememory";
 import { say, sfx } from "@/lib/sound";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -34,8 +35,7 @@ function LedRow({ counting }: { counting: boolean }) {
             ...d.style,
             color: counting ? "#fff" : colors[d.i % colors.length],
             backgroundColor: "currentcolor",
-            animation: `led-twinkle ${counting ? 0.35 : 1.8}s ease-in-out infinite`,
-            animationDelay: `${(d.i % 8) * (counting ? 0.04 : 0.18)}s`,
+            animation: `led-twinkle ${counting ? 0.35 : 1.8}s ease-in-out ${(d.i % 8) * (counting ? 0.04 : 0.18)}s infinite`,
           }}
         />
       ))}
@@ -46,10 +46,10 @@ function LedRow({ counting }: { counting: boolean }) {
 export function Booth(props: {
   count: PhotoCount;
   filterId: string;
-  onDone: (photos: string[]) => void;
+  onDone: (photos: string[], live?: LiveCapture) => void;
   onExit: () => void;
 }) {
-  const { videoRef, status, facing, canFlip, start, stop, flip, capture } = useCamera();
+  const { videoRef, status, facing, canFlip, start, stop, flip, capture, getStream } = useCamera();
   const [phase, setPhase] = useState<Phase>("warmup");
   const [lightsOn, setLightsOn] = useState(false);
   const [screenOn, setScreenOn] = useState(false);
@@ -103,6 +103,38 @@ export function Booth(props: {
 
   const runSession = useCallback(async () => {
     setPhase("session");
+
+    // live memory: quietly record the whole session (starts well before the first countdown)
+    const mime = recordingMime();
+    const stream = getStream();
+    let rec: MediaRecorder | null = null;
+    const chunks: Blob[] = [];
+    const shotTimes: number[] = [];
+    let t0 = 0;
+    if (mime && stream) {
+      try {
+        rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+        rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        rec.start(1000);
+        t0 = performance.now();
+      } catch {
+        rec = null;
+      }
+    }
+    const stopRecording = async (): Promise<LiveCapture | undefined> => {
+      if (!rec) return undefined;
+      if (rec.state !== "inactive") {
+        await new Promise<void>((r) => {
+          rec!.onstop = () => r();
+          rec!.stop();
+        });
+      }
+      const blob = new Blob(chunks, { type: mime });
+      return blob.size > 0 && shotTimes.length > 0
+        ? { blob, mime: mime!, times: shotTimes, mirrored: facing === "user" }
+        : undefined;
+    };
+
     const poses = randomPoses(props.count);
     const shots: string[] = [];
     for (let i = 0; i < props.count; i++) {
@@ -126,6 +158,7 @@ export function Booth(props: {
       if (cancelled.current) return;
       const shot = capture();
       if (shot) {
+        if (rec) shotTimes.push(performance.now() - t0);
         shots.push(shot);
         setPhotos([...shots]);
         sfx.pop();
@@ -135,14 +168,16 @@ export function Booth(props: {
       await sleep(720);
       if (cancelled.current) return;
     }
+    await sleep(400); // final reactions
+    const live = await stopRecording();
     setPhase("processing");
     setMessage("Processing your memories...");
     sfx.chime();
     await sleep(2400);
     if (cancelled.current) return;
-    props.onDone(shots);
+    props.onDone(shots, live);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.count, capture, props.onDone]);
+  }, [props.count, capture, props.onDone, facing]);
 
   const counting = countdown !== null;
 

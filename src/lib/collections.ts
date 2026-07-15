@@ -1175,6 +1175,9 @@ export const collectionById = (id: string) => COLLECTIONS.find((c) => c.id === i
 /** scale a base value; when the base is 0 the slider adds from nothing (scale 1 = untouched default) */
 const scaled = (base: number, scale: number, unit: number) => (base ? base * scale : Math.max(0, (scale - 1) * unit));
 
+/** corner radius of the photo windows after customization (shared with the strip player) */
+export const photoRadius = (col: Collection, custom: FrameCustom) => scaled(col.photo.radius, custom.radiusScale, 14);
+
 export function stripLayout(col: Collection, count: PhotoCount, custom: FrameCustom) {
   const bw = scaled(col.photo.bw, custom.borderScale, 20);
   const bottom = col.photo.bottom != null ? col.photo.bottom * custom.borderScale : bw;
@@ -1244,7 +1247,7 @@ export async function renderStrip(opts: {
 
   // photos
   const images = await Promise.all(opts.photos.map(loadImage));
-  const radius = scaled(col.photo.radius, custom.radiusScale, 14);
+  const radius = photoRadius(col, custom);
   images.forEach((img, i) => {
     const s = slots[i];
     c.save();

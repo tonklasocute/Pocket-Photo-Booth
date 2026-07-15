@@ -13,6 +13,7 @@ import { Printing } from "@/components/Printing";
 import { Setup } from "@/components/Setup";
 import type { PhotoCount } from "@/lib/booth";
 import { DEFAULT_CUSTOM, type FrameCustom } from "@/lib/collections";
+import type { LiveCapture } from "@/lib/livememory";
 import type { StripRecipe } from "@/lib/strip";
 import { say, setSoundEnabled, sfx, soundEnabled } from "@/lib/sound";
 
@@ -36,6 +37,7 @@ export default function Page() {
     custom: FrameCustom;
   }>({ frameId: "classic", filterId: "none", count: 4, custom: DEFAULT_CUSTOM });
   const [recipe, setRecipe] = useState<StripRecipe | null>(null);
+  const [liveCap, setLiveCap] = useState<LiveCapture | null>(null);
   const [baseStrip, setBaseStrip] = useState<HTMLCanvasElement | null>(null);
   const [sound, setSound] = useState(true);
 
@@ -98,9 +100,10 @@ export default function Page() {
             <Booth
               count={settings.count}
               filterId={settings.filterId}
-              onDone={(shots) => {
+              onDone={(shots, live) => {
                 // seed fixed here so the printed strip and every export share
                 // the same one-of-a-kind imperfections
+                setLiveCap(live ?? null);
                 setRecipe({
                   photos: shots,
                   frameId: settings.frameId,
@@ -128,8 +131,9 @@ export default function Page() {
             <Editor
               base={baseStrip}
               recipe={recipe}
-              onFinish={(finalUrl) => {
-                addStripToDesk(finalUrl);
+              live={liveCap ?? undefined}
+              onFinish={(finalUrl, extras) => {
+                addStripToDesk(finalUrl, extras);
                 say("See you again.");
                 setScene("thanks");
                 setTimeout(() => goWithCurtain("desk"), 2400);

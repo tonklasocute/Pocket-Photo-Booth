@@ -2,11 +2,17 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Check, Copy, Download, Highlighter, Link2, Pen, PenLine, Redo2, Share2, Smile, Trash2, Type, Undo2,
+  Check, Clapperboard, Copy, Download, Highlighter, Link2, Pause, Pen, PenLine, Play, Redo2, Share2, Smile, Trash2, Type, Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StripPlayer } from "@/components/StripPlayer";
 import { CAPTION_FONTS, STICKERS } from "@/lib/booth";
+import { collectionById } from "@/lib/collections";
+import {
+  blobToDataUrl, clipExt, downloadBlob, encodeGif, highlightGif, processLive,
+  type LiveCapture, type LiveMemory,
+} from "@/lib/livememory";
 import {
   canvasToBlob, composeFinal, drawStrokes,
   type StickerItem, type StripRecipe, type Stroke, type TextItem,
@@ -38,11 +44,13 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function Editor({
   base,
   recipe,
+  live,
   onFinish,
 }: {
   base: HTMLCanvasElement;
   recipe: StripRecipe;
-  onFinish: (finalUrl: string) => void;
+  live?: LiveCapture;
+  onFinish: (finalUrl: string, extras: { gif?: string; frame: string }) => void;
 }) {
   const [tab, setTab] = useState<Tab>("stickers");
   const [stickers, setStickers] = useState<StickerItem[]>([]);
@@ -62,6 +70,38 @@ export function Editor({
   const drawRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const strokeRef = useRef<Stroke | null>(null);
+
+  /* ── live memory: extract frames + session GIF in the background ── */
+
+  const [memory, setMemory] = useState<LiveMemory | null>(null);
+  const [gifUrl, setGifUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const gifBlob = useRef<Blob | null>(null);
+  const sessionTs = useRef(new Date());
+
+  useEffect(() => {
+    if (!live) return;
+    let alive = true;
+    (async () => {
+      try {
+        const mem = await processLive(live, (d, t) => alive && setProgress(d / t));
+        if (!alive) return;
+        setMemory(mem);
+        setPlaying(true);
+        const gif = await encodeGif(mem.sessionFrames, mem.fps);
+        if (!alive) return;
+        gifBlob.current = gif;
+        setGifUrl(URL.createObjectURL(gif));
+      } catch {
+        /* live memory is a bonus — the strip still works without it */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toast = (msg: string) => {
     setNote(msg);
@@ -291,12 +331,26 @@ export function Editor({
     toast("Link copied! 🔗");
   };
 
+  const saveLive = async (make: () => Promise<Blob> | Blob, name: string) => {
+    sfx.click();
+    setBusy(true);
+    try {
+      downloadBlob(await make(), name);
+      toast("Saved! 🎞️");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const finish = async () => {
     sfx.chime();
     setBusy(true);
     // desk copy at 1.5× keeps localStorage small; downloads stay 3×
     const final = await composeFinal(recipe, { strokes, stickers, texts }, 1.5);
-    onFinish(final.toDataURL("image/jpeg", 0.85));
+    onFinish(final.toDataURL("image/jpeg", 0.85), {
+      gif: gifBlob.current ? await blobToDataUrl(gifBlob.current) : undefined,
+      frame: collectionById(recipe.frameId).name,
+    });
   };
 
   /* ── render ─────────────────────────────────────────────── */
@@ -320,6 +374,21 @@ export function Editor({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={baseUrl} alt="Your photo strip" className="block w-full" draggable={false} />
+          {memory && <StripPlayer recipe={recipe} memory={memory} playing={playing} />}
+          {memory && (
+            <button
+              aria-label={playing ? "Pause live strip" : "Play live strip"}
+              onClick={(e) => {
+                e.stopPropagation();
+                sfx.click();
+                setPlaying((p) => !p);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="absolute bottom-2 right-2 z-20 flex size-9 items-center justify-center rounded-full bg-black/45 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/65"
+            >
+              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-[1px]" />}
+            </button>
+          )}
           <canvas
             ref={drawRef}
             width={base.width}
@@ -576,6 +645,68 @@ export function Editor({
             <Link2 className="mr-1 size-4" /> Copy link
           </Button>
         </div>
+
+        {/* live memory card */}
+        {live && (
+          <div className="rounded-2xl border border-border bg-white p-4">
+            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Clapperboard className="size-4" /> Live memory
+            </h2>
+            {!memory ? (
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">Developing your live memory…</p>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#f5a8be] to-[#e88ea9] transition-[width]"
+                    style={{ width: `${Math.round(progress * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <div className="relative w-28 shrink-0 overflow-hidden rounded-xl border border-border">
+                    {gifUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={gifUrl} alt="Live memory preview" className="block w-full" />
+                    ) : (
+                      <div className="aspect-[4/3] w-full animate-pulse bg-black/10" />
+                    )}
+                  </div>
+                  <div className="flex flex-col justify-center gap-0.5 text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground">{collectionById(recipe.frameId).name}</p>
+                    <p>{sessionTs.current.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                    <p>{sessionTs.current.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button variant="outline" size="sm" disabled={busy || !gifBlob.current} onClick={() => saveLive(() => gifBlob.current!, "live-memory.gif")} className="rounded-xl">
+                    <Download className="mr-1 size-3.5" /> GIF
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => saveLive(() => highlightGif(memory), "live-highlight.gif")} className="rounded-xl">
+                    <Download className="mr-1 size-3.5" /> Highlight
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => saveLive(() => live.blob, `live-memory.${clipExt(live.mime)}`)} className="rounded-xl">
+                    <Download className="mr-1 size-3.5" /> {clipExt(live.mime) === "mp4" ? "MP4" : "WebM"}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Live photos:</span>
+                  {memory.photoFrames.map((_, i) => (
+                    <button
+                      key={i}
+                      disabled={busy}
+                      onClick={() => saveLive(() => encodeGif(memory.photoFrames[i], memory.fps), `live-photo-${i + 1}.gif`)}
+                      className="rounded-lg border-2 border-border px-2.5 py-1 text-xs font-semibold hover:border-[#f5b8c8] disabled:opacity-50"
+                    >
+                      #{i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
           <Button

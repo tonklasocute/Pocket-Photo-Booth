@@ -74,5 +74,7 @@ export function useCamera() {
     return canvas.toDataURL("image/jpeg", 0.92);
   }, [facing]);
 
-  return { videoRef, status, facing, canFlip, start, stop, flip, capture };
+  const getStream = useCallback(() => streamRef.current, []);
+
+  return { videoRef, status, facing, canFlip, start, stop, flip, capture, getStream };
 }
