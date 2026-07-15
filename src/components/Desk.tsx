@@ -155,9 +155,10 @@ export function Desk({ onBack }: { onBack: () => void }) {
             onMouseEnter={() => setHovered(s.id)}
             onMouseLeave={() => setHovered(null)}
           >
+            {/* live memory: gif swaps in-place on hover (desktop) / tap (mobile), lazy-mounted */}
             <img
-              src={s.img}
-              alt="Saved photo strip"
+              src={s.gif && (hovered === s.id || selected === s.id) ? s.gif : s.img}
+              alt={s.gif && (hovered === s.id || selected === s.id) ? "Live memory strip" : "Saved photo strip"}
               draggable={false}
               className={`w-full rounded-md shadow-[0_14px_30px_rgba(0,0,0,0.45)] ${
                 selected === s.id ? "ring-4 ring-[#f5b8c8]/80" : ""
@@ -168,27 +169,11 @@ export function Desk({ onBack }: { onBack: () => void }) {
               aria-hidden
               className="absolute -top-2 left-1/2 h-5 w-14 -translate-x-1/2 -rotate-3 rounded-sm bg-white/40 shadow-sm backdrop-blur-[1px]"
             />
-            {/* live memory: badge at rest, animated preview on hover / tap */}
-            {s.gif &&
-              (hovered === s.id || selected === s.id ? (
-                <motion.div
-                  className="pointer-events-none absolute -top-28 left-1/2 z-50 w-32 -translate-x-1/2 overflow-hidden rounded-lg border-4 border-white bg-white shadow-2xl"
-                  initial={{ opacity: 0, y: 10, rotate: -3 }}
-                  animate={{ opacity: 1, y: 0, rotate: -2 }}
-                >
-                  {/* gif img mounts only while shown — lazy by construction */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.gif} alt="Live memory" className="block w-full rounded-[3px]" />
-                  <p className="truncate px-1 pt-1 text-center text-[9px] font-semibold text-[#5c4a52]">
-                    {s.frame ?? "Live memory"}
-                    {s.ts ? ` · ${new Date(s.ts).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-                  </p>
-                </motion.div>
-              ) : (
-                <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
-                  <Play className="size-2.5 translate-x-[0.5px]" />
-                </span>
-              ))}
+            {s.gif && hovered !== s.id && selected !== s.id && (
+              <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+                <Play className="size-2.5 translate-x-[0.5px]" />
+              </span>
+            )}
           </motion.div>
         ))}
       </div>

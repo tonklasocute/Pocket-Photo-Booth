@@ -36,7 +36,8 @@ export function StripPlayer({ recipe, memory, playing }: { recipe: StripRecipe; 
       slots.forEach((s, i) => {
         const fs = memory.photoFrames[i];
         if (!fs?.length) return;
-        const pos = (t * memory.fps) % fs.length;
+        // rAF's first timestamp can precede the performance.now() captured above → keep pos non-negative
+        const pos = (((t * memory.fps) % fs.length) + fs.length) % fs.length;
         const i0 = Math.floor(pos);
         const ix = s.x + bw;
         const iy = s.y + bw;

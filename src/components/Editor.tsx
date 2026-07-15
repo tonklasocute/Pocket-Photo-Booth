@@ -10,7 +10,7 @@ import { StripPlayer } from "@/components/StripPlayer";
 import { CAPTION_FONTS, STICKERS } from "@/lib/booth";
 import { collectionById } from "@/lib/collections";
 import {
-  blobToDataUrl, clipExt, downloadBlob, encodeGif, highlightGif, processLive,
+  blobToDataUrl, downloadBlob, processLive, stripGif,
   type LiveCapture, type LiveMemory,
 } from "@/lib/livememory";
 import {
@@ -89,7 +89,7 @@ export function Editor({
         if (!alive) return;
         setMemory(mem);
         setPlaying(true);
-        const gif = await encodeGif(mem.sessionFrames, mem.fps);
+        const gif = await stripGif(recipe, mem);
         if (!alive) return;
         gifBlob.current = gif;
         setGifUrl(URL.createObjectURL(gif));
@@ -663,45 +663,30 @@ export function Editor({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <div className="relative w-28 shrink-0 overflow-hidden rounded-xl border border-border">
-                    {gifUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={gifUrl} alt="Live memory preview" className="block w-full" />
-                    ) : (
-                      <div className="aspect-[4/3] w-full animate-pulse bg-black/10" />
-                    )}
-                  </div>
-                  <div className="flex flex-col justify-center gap-0.5 text-sm text-muted-foreground">
+              <div className="flex gap-4">
+                <div className="w-20 shrink-0 overflow-hidden rounded-lg border border-border shadow-sm">
+                  {gifUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={gifUrl} alt="Live memory preview" className="block w-full" />
+                  ) : (
+                    <div className="aspect-[1/3] w-full animate-pulse bg-black/10" />
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col justify-center gap-2">
+                  <div className="text-sm text-muted-foreground">
                     <p className="font-semibold text-foreground">{collectionById(recipe.frameId).name}</p>
                     <p>{sessionTs.current.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
                     <p>{sessionTs.current.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" size="sm" disabled={busy || !gifBlob.current} onClick={() => saveLive(() => gifBlob.current!, "live-memory.gif")} className="rounded-xl">
-                    <Download className="mr-1 size-3.5" /> GIF
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy || !gifBlob.current}
+                    onClick={() => saveLive(() => gifBlob.current!, "live-memory.gif")}
+                    className="self-start rounded-xl"
+                  >
+                    <Download className="mr-1 size-3.5" /> Save GIF
                   </Button>
-                  <Button variant="outline" size="sm" disabled={busy} onClick={() => saveLive(() => highlightGif(memory), "live-highlight.gif")} className="rounded-xl">
-                    <Download className="mr-1 size-3.5" /> Highlight
-                  </Button>
-                  <Button variant="outline" size="sm" disabled={busy} onClick={() => saveLive(() => live.blob, `live-memory.${clipExt(live.mime)}`)} className="rounded-xl">
-                    <Download className="mr-1 size-3.5" /> {clipExt(live.mime) === "mp4" ? "MP4" : "WebM"}
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Live photos:</span>
-                  {memory.photoFrames.map((_, i) => (
-                    <button
-                      key={i}
-                      disabled={busy}
-                      onClick={() => saveLive(() => encodeGif(memory.photoFrames[i], memory.fps), `live-photo-${i + 1}.gif`)}
-                      className="rounded-lg border-2 border-border px-2.5 py-1 text-xs font-semibold hover:border-[#f5b8c8] disabled:opacity-50"
-                    >
-                      #{i + 1}
-                    </button>
-                  ))}
                 </div>
               </div>
             )}

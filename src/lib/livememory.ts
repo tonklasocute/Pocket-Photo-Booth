@@ -1,8 +1,14 @@
-/* Live Memory — turn the booth's background recording into GIFs and an animated strip.
+/* Live Memory — turn the booth's background recording into one short looping GIF:
+   the printed strip with each shot's live moment playing inside its photo window.
    Frames are pulled from the recorded clip by seeking a <video>, given a light
-   film treatment once, then reused everywhere (GIF styles + strip player). */
+   film treatment once, then shared by the GIF and the in-app strip player. */
 
 import { applyPalette, GIFEncoder, quantize } from "gifenc";
+import { filterById, type PhotoCount } from "./booth";
+import {
+  collectionById, DEFAULT_CUSTOM, photoRadius, renderStrip, STRIP_W, stripLayout, type FrameCustom,
+} from "./collections";
+import type { StripRecipe } from "./strip";
 
 /** What the booth hands over: the raw recording + when each shutter fired. */
 export type LiveCapture = {
@@ -16,8 +22,6 @@ export type LiveCapture = {
 export type LiveMemory = {
   /** per photo: ~2s of treated frames centred on the shutter moment */
   photoFrames: HTMLCanvasElement[][];
-  /** evenly sampled frames spanning the whole session (≤10s worth) */
-  sessionFrames: HTMLCanvasElement[];
   fps: number;
 };
 
@@ -30,8 +34,6 @@ const pickMime = () =>
   );
 
 export const recordingMime = pickMime;
-
-export const clipExt = (mime: string) => (mime.includes("mp4") ? "mp4" : "webm");
 
 /* ── video loading (MediaRecorder blobs report Infinity duration) ── */
 
@@ -145,17 +147,13 @@ const range = (from: number, to: number, step: number) => {
   return r;
 };
 
-/** Extract everything the UI needs. Slow (one seek per frame) — run in the background. */
+/** Extract each photo's live moment. Slow (one seek per frame) — run in the background. */
 export async function processLive(cap: LiveCapture, onProgress?: (done: number, total: number) => void): Promise<LiveMemory> {
   const v = await loadVideo(cap.blob);
-  const dur = v.duration;
   const step = 1 / LIVE_FPS;
 
   const perPhoto = cap.times.map((t) => range(t / 1000 - 1, t / 1000 + 1, step));
-  const sessionCount = Math.round(Math.min(10, dur) * LIVE_FPS);
-  const session = Array.from({ length: sessionCount }, (_, i) => (i / (sessionCount - 1)) * dur);
-
-  const total = perPhoto.reduce((n, a) => n + a.length, 0) + session.length;
+  const total = perPhoto.reduce((n, a) => n + a.length, 0);
   let done = 0;
   const tick = () => onProgress?.(++done, total);
 
@@ -173,9 +171,8 @@ export async function processLive(cap: LiveCapture, onProgress?: (done: number, 
     });
     photoFrames.push(frames);
   }
-  const sessionFrames = await grabFrames(v, session, cap.mirrored, tick);
   URL.revokeObjectURL(v.src);
-  return { photoFrames, sessionFrames, fps: LIVE_FPS };
+  return { photoFrames, fps: LIVE_FPS };
 }
 
 /* ── GIF encoding ── */
@@ -209,14 +206,43 @@ export async function encodeGif(frames: HTMLCanvasElement[], fps: number): Promi
   return new Blob([gif.bytes()], { type: "image/gif" });
 }
 
-/** Style 3 — quick highlight: just the beat around each shutter, stitched together. */
-export function highlightGif(mem: LiveMemory): Promise<Blob> {
-  const keep = Math.round(LIVE_FPS * 0.75); // ~0.75s per photo
-  const frames = mem.photoFrames.flatMap((fs) => {
-    const mid = fs.length >> 1;
-    return fs.slice(Math.max(0, mid - (keep >> 1)), mid + Math.ceil(keep / 2));
-  });
-  return encodeGif(frames, LIVE_FPS);
+/** The live memory GIF: the whole printed strip, with every shot's live moment
+    playing inside its own photo window — like the strip come to life. ~2s loop. */
+export async function stripGif(recipe: StripRecipe, mem: LiveMemory): Promise<Blob> {
+  const scale = 220 / STRIP_W;
+  const base = await renderStrip({ ...recipe, scale });
+  const col = collectionById(recipe.frameId);
+  const custom: FrameCustom = { ...DEFAULT_CUSTOM, ...recipe.custom };
+  const { slots, bw, bottom } = stripLayout(col, recipe.photos.length as PhotoCount, custom);
+  const radius = photoRadius(col, custom);
+  const filter = filterById(recipe.filterId);
+  const n = Math.min(...mem.photoFrames.map((fs) => fs.length));
+  const frames: HTMLCanvasElement[] = [];
+  for (let k = 0; k < n; k++) {
+    const c = document.createElement("canvas");
+    c.width = base.width;
+    c.height = base.height;
+    const ctx = c.getContext("2d")!;
+    ctx.drawImage(base, 0, 0);
+    ctx.scale(scale, scale); // slot coords live in layout space
+    slots.forEach((s, i) => {
+      const f = mem.photoFrames[i][k];
+      const ix = s.x + bw;
+      const iy = s.y + bw;
+      const iw = s.w - bw * 2;
+      const ih = s.h - bw - bottom;
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, iw, ih, bw > 0 ? Math.max(0, radius - 4) : radius);
+      ctx.clip();
+      if (filter.css !== "none") ctx.filter = filter.css;
+      const sc = Math.max(iw / f.width, ih / f.height);
+      ctx.drawImage(f, ix + (iw - f.width * sc) / 2, iy + (ih - f.height * sc) / 2, f.width * sc, f.height * sc);
+      ctx.restore();
+    });
+    frames.push(c);
+  }
+  return encodeGif(frames, mem.fps);
 }
 
 export const blobToDataUrl = (blob: Blob) =>
