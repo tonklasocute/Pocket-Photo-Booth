@@ -236,8 +236,8 @@ export function Setup(props: {
                 <div className="flex items-center gap-2" role="radiogroup" aria-label="Date format">
                   {(
                     [
-                      ["long", "July 14"],
-                      ["short", "07.14"],
+                      ["long", new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" })],
+                      ["short", `${String(new Date().getMonth() + 1).padStart(2, "0")}.${String(new Date().getDate()).padStart(2, "0")}`],
                       ["none", "No date"],
                     ] as const
                   ).map(([v, label]) => (

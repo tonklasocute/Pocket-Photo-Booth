@@ -1172,9 +1172,12 @@ export const collectionById = (id: string) => COLLECTIONS.find((c) => c.id === i
 
 /* ── layout & render ─────────────────────────────────────── */
 
+/** scale a base value; when the base is 0 the slider adds from nothing (scale 1 = untouched default) */
+const scaled = (base: number, scale: number, unit: number) => (base ? base * scale : Math.max(0, (scale - 1) * unit));
+
 export function stripLayout(col: Collection, count: PhotoCount, custom: FrameCustom) {
-  const bw = col.photo.bw * custom.borderScale;
-  const bottom = (col.photo.bottom ?? col.photo.bw) * custom.borderScale;
+  const bw = scaled(col.photo.bw, custom.borderScale, 20);
+  const bottom = col.photo.bottom != null ? col.photo.bottom * custom.borderScale : bw;
   const cardW = STRIP_W - col.pad * 2;
   const imgW = cardW - bw * 2;
   const imgH = Math.round((imgW * 3) / 4);
@@ -1241,7 +1244,7 @@ export async function renderStrip(opts: {
 
   // photos
   const images = await Promise.all(opts.photos.map(loadImage));
-  const radius = col.photo.radius * custom.radiusScale;
+  const radius = scaled(col.photo.radius, custom.radiusScale, 14);
   images.forEach((img, i) => {
     const s = slots[i];
     c.save();
