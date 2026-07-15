@@ -2,17 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Check, Clapperboard, Copy, Download, Highlighter, Link2, Pause, Pen, PenLine, Play, Redo2, Share2, Smile, Trash2, Type, Undo2,
+  Check, Clapperboard, Copy, Download, Highlighter, Link2, Pen, PenLine, Redo2, Share2, Smile, Trash2, Type, Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { StripPlayer } from "@/components/StripPlayer";
 import { CAPTION_FONTS, STICKERS } from "@/lib/booth";
 import { collectionById } from "@/lib/collections";
-import {
-  blobToDataUrl, downloadBlob, processLive, stripGif,
-  type LiveCapture, type LiveMemory,
-} from "@/lib/livememory";
+import { blobToDataUrl, downloadBlob, processLive, stripGif, type LiveCapture } from "@/lib/livememory";
 import {
   canvasToBlob, composeFinal, drawStrokes,
   type StickerItem, type StripRecipe, type Stroke, type TextItem,
@@ -73,10 +69,8 @@ export function Editor({
 
   /* ── live memory: extract frames + session GIF in the background ── */
 
-  const [memory, setMemory] = useState<LiveMemory | null>(null);
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const gifBlob = useRef<Blob | null>(null);
   const sessionTs = useRef(new Date());
 
@@ -87,8 +81,6 @@ export function Editor({
       try {
         const mem = await processLive(live, (d, t) => alive && setProgress(d / t));
         if (!alive) return;
-        setMemory(mem);
-        setPlaying(true);
         const gif = await stripGif(recipe, mem);
         if (!alive) return;
         gifBlob.current = gif;
@@ -374,21 +366,6 @@ export function Editor({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={baseUrl} alt="Your photo strip" className="block w-full" draggable={false} />
-          {memory && <StripPlayer recipe={recipe} memory={memory} playing={playing} />}
-          {memory && (
-            <button
-              aria-label={playing ? "Pause live strip" : "Play live strip"}
-              onClick={(e) => {
-                e.stopPropagation();
-                sfx.click();
-                setPlaying((p) => !p);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="absolute bottom-2 right-2 z-20 flex size-9 items-center justify-center rounded-full bg-black/45 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/65"
-            >
-              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-[1px]" />}
-            </button>
-          )}
           <canvas
             ref={drawRef}
             width={base.width}
@@ -652,7 +629,7 @@ export function Editor({
             <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               <Clapperboard className="size-4" /> Live memory
             </h2>
-            {!memory ? (
+            {!gifUrl ? (
               <div>
                 <p className="mb-2 text-sm text-muted-foreground">Developing your live memory…</p>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -665,12 +642,8 @@ export function Editor({
             ) : (
               <div className="flex gap-4">
                 <div className="w-20 shrink-0 overflow-hidden rounded-lg border border-border shadow-sm">
-                  {gifUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={gifUrl} alt="Live memory preview" className="block w-full" />
-                  ) : (
-                    <div className="aspect-[1/3] w-full animate-pulse bg-black/10" />
-                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={gifUrl} alt="Live memory preview" className="block w-full" />
                 </div>
                 <div className="flex flex-1 flex-col justify-center gap-2">
                   <div className="text-sm text-muted-foreground">
